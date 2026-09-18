@@ -23,9 +23,13 @@ export function QRGallery({ upiData, totalAmount, onReset }: QRGalleryProps) {
     let remaining = totalAmount;
     const newSplits: SplitInfo[] = [];
 
+    const cleanPa = upiData.pa.trim();
+    const cleanPn = (upiData.pn && upiData.pn.trim()) ? upiData.pn.trim() : cleanPa;
+
     while (remaining > 0) {
       const chunk = remaining > chunkLimit ? chunkLimit : remaining;
-      const uri = `upi://pay?pa=${upiData.pa}&pn=${encodeURIComponent(upiData.pn || '')}&am=${chunk}&cu=INR`;
+      // NPCI Compliant UPI Intent URI specification
+      const uri = `upi://pay?pa=${encodeURIComponent(cleanPa)}&pn=${encodeURIComponent(cleanPn)}&am=${chunk.toFixed(2)}&cu=INR`;
       newSplits.push({ amount: chunk, uri });
       remaining -= chunk;
     }

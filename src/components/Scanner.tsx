@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import jsQR from 'jsqr';
 import type { UpiData } from '../App';
-import { Keyboard, ArrowRight, Upload, Image as ImageIcon } from 'lucide-react';
+import { Keyboard, ArrowRight, Upload, Image as ImageIcon, Camera } from 'lucide-react';
 
 interface ScannerProps {
   onScanSuccess: (data: UpiData) => void;
@@ -132,6 +132,7 @@ function parseUpiString(text: string): UpiData | null {
 export function Scanner({ onScanSuccess }: ScannerProps) {
   const [error, setError] = useState<string>('');
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [permissionDenied, setPermissionDenied] = useState<boolean>(false);
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
   const [manualPa, setManualPa] = useState<string>('');
   const [manualPn, setManualPn] = useState<string>('');
@@ -139,13 +140,28 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const requestCameraPermission = async () => {
+    try {
+      setError('');
+      setPermissionDenied(false);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      stream.getTracks().forEach((track) => track.stop());
+      // Re-trigger scanner mount attempt
+      setIsScanning(false);
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Camera permission request error:', err);
+      setPermissionDenied(true);
+      setError('Camera access is blocked by your browser. Tap below for instructions or upload a QR image.');
+    }
+  };
+
   useEffect(() => {
     const html5QrCode = new Html5Qrcode("reader");
     qrScannerRef.current = html5QrCode;
     let animFrameId: number | null = null;
     let isStopped = false;
 
-    // Initialize native hardware-accelerated BarcodeDetector if supported by OS/Browser (Android Chrome, iOS Safari, Edge)
     let nativeDetector: any = null;
     if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
       try {
@@ -155,10 +171,11 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
       }
     }
     
+    // Always attempt fresh camera start on every page load/refresh
     html5QrCode.start(
       { facingMode: "environment" },
       {
-        fps: 30, // 30 FPS for high-speed continuous frame processing
+        fps: 30,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
           const minDim = Math.min(viewfinderWidth, viewfinderHeight);
           const boxSize = Math.max(200, Math.floor(minDim * 0.75));
@@ -177,6 +194,7 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
       }
     ).then(() => {
       setIsScanning(true);
+      setPermissionDenied(false);
 
       const videoEl = document.querySelector("#reader video") as HTMLVideoElement;
       if (videoEl) {
@@ -187,12 +205,10 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
         const scanFrameLoop = async (time: number) => {
           if (isStopped) return;
 
-          // Process frame every 35ms (~30 FPS)
           if (time - lastScanTime >= 35) {
             lastScanTime = time;
 
             if (videoEl && !videoEl.paused && !videoEl.ended && videoEl.readyState >= 2) {
-              // 1. Try Native Hardware GPU BarcodeDetector first (Sub-10ms performance)
               if (nativeDetector) {
                 try {
                   const barcodes = await nativeDetector.detect(videoEl);
@@ -207,7 +223,6 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
                 }
               }
 
-              // 2. High-speed jsQR canvas scan fallback
               if (offscreenCtx && !isStopped) {
                 const w = videoEl.videoWidth || 640;
                 const h = videoEl.videoHeight || 480;
@@ -239,8 +254,9 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
         animFrameId = requestAnimationFrame(scanFrameLoop);
       }
     }).catch((err) => {
-      console.error(err);
-      setError('Failed to access camera. Please allow camera permissions, upload a QR image, or enter UPI ID manually.');
+      console.error('Camera start failed:', err);
+      setPermissionDenied(true);
+      setError('Camera access is blocked by your browser. Tap "Request Camera Permission Again" below or upload a QR image.');
     });
 
     return () => {
@@ -315,8 +331,24 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (manualPa.trim() && manualPa.includes('@')) {
-      onScanSuccess({ pa: manualPa.trim(), pn: manualPn.trim() || undefined });
+    const rawInput = manualPa.trim();
+    const rawPn = manualPn.trim();
+
+    // Check if user pasted a full upi:// URL or query string into the box
+    const parsed = parseUpiString(rawInput);
+    if (parsed) {
+      onScanSuccess({
+        pa: parsed.pa.trim(),
+        pn: rawPn || parsed.pn || parsed.pa.trim(),
+      });
+      return;
+    }
+
+    if (rawInput && rawInput.includes('@')) {
+      onScanSuccess({
+        pa: rawInput,
+        pn: rawPn || rawInput,
+      });
     } else {
       setError('Please enter a valid UPI ID (e.g. mobile@upi or name@bank).');
     }
@@ -340,6 +372,24 @@ export function Scanner({ onScanSuccess }: ScannerProps) {
       <div className="w-full max-w-md aspect-[4/3] rounded-[24px] overflow-hidden shadow-2xl bg-black relative border border-hairline flex items-center justify-center">
         <div id="reader" className="w-full h-full" />
         
+        {/* Permission Request Prompt Overlay */}
+        {permissionDenied && (
+          <div className="absolute inset-0 bg-surface-black/90 p-6 flex flex-col items-center justify-center text-center gap-3 z-10">
+            <Camera className="w-10 h-10 text-primary-on-dark animate-pulse" />
+            <p className="text-white text-sm font-semibold">Camera Access Blocked or Disabled</p>
+            <p className="text-ink-muted-80 text-xs max-w-xs">
+              Tap below to request permission again, or unblock camera in your browser address bar (🔒 icon).
+            </p>
+            <button
+              type="button"
+              onClick={requestCameraPermission}
+              className="bg-primary text-on-primary text-xs font-semibold py-2.5 px-4 rounded-xl shadow-md active:scale-95 transition-all mt-1"
+            >
+              Request Camera Permission Again
+            </button>
+          </div>
+        )}
+
         {/* Animated Viewfinder Overlay */}
         {isScanning && (
           <div className="aria-hidden:true pointer-events-none absolute inset-0 flex items-center justify-center p-6">
