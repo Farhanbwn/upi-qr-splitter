@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-canvas text-body font-text antialiased;
+    letter-spacing: -0.374px; /* SF Pro Text body default */
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+/* html5-qrcode UI overrides for laptop and mobile webcams */
+#reader {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent !important;
+  position: relative !important;
+}
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 16px !important;
+}
+#reader img {
+  display: none !important; 
+}
+#reader button {
+  background-color: #fafafc !important;
+  color: #333333 !important;
+  font-size: 14px !important;
+  border-radius: 11px !important;
+  padding: 8px 14px !important;
+  border: 1px solid #e0e0e0 !important;
+  margin-top: 12px !important;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+#reader button:active {
+  transform: scale(0.95);
+}
+#reader a {
+  display: none !important; /* Hides "Powered by..." */
+}
+#reader__scan_region {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+}
+#reader__scan_region video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+#reader__dashboard {
+  display: none !important;
+}
+#reader canvas {
+  display: none !important;
+}
